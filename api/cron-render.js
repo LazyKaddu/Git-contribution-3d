@@ -38,10 +38,11 @@ export default async function handler(req, res) {
 
         const imageBuffer = await page.screenshot({ type: 'png' });
 
-        // Upload to Vercel Blob
+        // Upload to Vercel Blob (supports private store)
         await put('github-3d-contrib.png', imageBuffer, {
-            access: 'public',
-            addRandomSuffix: false // Ensures the URL stays identical
+            access: 'private',
+            addRandomSuffix: false, // Ensures the URL stays identical
+            allowOverwrite: true    // Allows periodic overwriting
         });
 
         res.status(200).json({ success: true });
