@@ -1,0 +1,16 @@
+name: Trigger Vercel 3D Render
+
+on:
+  schedule:
+    # Runs every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Allows you to run it manually
+
+jobs:
+  ping-vercel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit Vercel Cron Endpoint
+        run: |
+          curl -X GET "https://your-project-url.vercel.app/api/cron-render" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

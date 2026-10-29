@@ -29,7 +29,7 @@ flowchart TD
     end
 
     subgraph Cron [2. Automated Capture]
-        D["vercel.json Cron (every 15 min)"] -->|"Triggers"| E["api/cron-render.js"]
+        D["GitHub Actions (every 15 min)"] -->|"Triggers with CRON_SECRET"| E["api/cron-render.js"]
         E -->|"Launches Headless Chromium"| A
         E -->|"Waits for isSceneReady & takes screenshot"| F["PNG Buffer"]
         F -->|"Uploads (addRandomSuffix: false)"| G[("Vercel Blob Storage")]
@@ -49,13 +49,15 @@ flowchart TD
 ## Project Structure
 
 ```
+├── .github/workflows/
+│   └── trigger-render.yml # GitHub Actions workflow triggering the render every 15 min
 ├── api/
 │   ├── cron-render.js    # Puppeteer cron job that captures the 3D scene & uploads to Blob
 │   └── get-image.js      # Serverless proxy that serves the image with anti-cache headers
 ├── public/
 │   └── index.html        # Pure Three.js WebGL 3D contribution visualizer
 ├── package.json          # Node.js dependencies (Puppeteer, Chromium, Vercel Blob)
-├── vercel.json           # Cron schedule & CORS header configuration
+├── vercel.json           # CORS header configuration
 └── README.md             # Project documentation
 ```
 
