@@ -6,6 +6,10 @@ import { put } from '@vercel/blob';
 export const maxDuration = 15; // Allow function to run up to 15 seconds
 
 export default async function handler(req, res) {
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
     // Secure the route: require CRON_SECRET
     if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
         return res.status(401).json({ error: 'Unauthorized' });

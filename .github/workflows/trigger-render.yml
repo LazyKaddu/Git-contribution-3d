@@ -12,5 +12,5 @@ jobs:
     steps:
       - name: Hit Vercel Cron Endpoint
         run: |
-          curl -X GET "https://your-project-url.vercel.app/api/cron-render" \
+          curl -X GET "https://git-contribution-3d.vercel.app/api/cron-render" \
           -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
