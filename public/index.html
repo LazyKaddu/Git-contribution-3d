@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub 3D Contribution Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #ffffff;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+    </script>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // URL Parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentUsername = urlParams.get('username') || urlParams.get('user') || 'LazyKaddu';
+        let currentYear = urlParams.get('year') || 'last';
+        let heightMultiplier = parseFloat(urlParams.get('multiplier') || '0.38');
+
+        // Color Palette (Reversed order for levels 1 to 4: dark green to luminous green)
+        const CONTRIBUTION_COLORS = [
+            0xebedf0, // Level 0: Empty day
+            0x196c2e, // Level 1: Deep forest green
+            0x2ea043, // Level 2: Medium rich green
+            0x3fb950, // Level 3: Vibrant emerald green
+            0x56d364  // Level 4: Vivid luminous lime green
+        ];
+
+        const BASE_HEIGHT = 0.18;
+        const BLOCK_SIZE = 0.92;
+        const CELL_SPACING = 1.16;
+
+        // Scene Setup
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Perspective Camera with optimized framing
+        const camera = new THREE.PerspectiveCamera(37, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        // Optimal angled perspective camera position
+        const DEFAULT_CAMERA_POS = new THREE.Vector3(0, 40, 40);
+        const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 1.5, 0);
+        camera.position.copy(DEFAULT_CAMERA_POS);
+        camera.lookAt(DEFAULT_CAMERA_TARGET);
+
+        // WebGL Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.82);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe1e4e8, 0.45);
+        hemiLight.position.set(0, 50, 0);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.35);
+        dirLight.position.set(24, 46, 32);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 5;
+        dirLight.shadow.camera.far = 140;
+        dirLight.shadow.camera.left = -40;
+        dirLight.shadow.camera.right = 40;
+        dirLight.shadow.camera.top = 22;
+        dirLight.shadow.camera.bottom = -22;
+        dirLight.shadow.bias = -0.0004;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+        fillLight.position.set(-25, 20, -20);
+        scene.add(fillLight);
+
+        // Root container for contribution meshes
+        const contribGroup = new THREE.Group();
+        scene.add(contribGroup);
+
+        let pillarMeshes = [];
+
+        // Helper: Create High-DPI Crisp Text Texture for Labels
+        function createTextTexture(text, fontSize = 64, color = '#24292f') {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const font = `700 ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+            ctx.font = font;
+            const metrics = ctx.measureText(text);
+            canvas.width = Math.ceil(metrics.width + 24);
+            canvas.height = Math.ceil(fontSize * 1.3);
+
+            ctx.font = font;
+            ctx.fillStyle = color;
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            return { texture, aspect: canvas.width / canvas.height };
+        }
+
+        // Helper: Create Text Mesh tilted naturally toward camera
+        function createTextPlane(text, height = 0.95, color = '#24292f', tiltAngle = 0.35) {
+            const { texture, aspect } = createTextTexture(text, 64, color);
+            const width = height * aspect;
+            const geometry = new THREE.PlaneGeometry(width, height);
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.rotation.x = -Math.PI / 2 + tiltAngle; // Tilted up towards camera
+            return mesh;
+        }
+
+        // Unit box geometry with base aligned at y = 0
+        const baseBoxGeometry = new THREE.BoxGeometry(BLOCK_SIZE, 1, BLOCK_SIZE);
+        baseBoxGeometry.translate(0, 0.5, 0);
+
+        // Fetch & Build Scene
+        async function loadContributions(username, year) {
+            try {
+                const apiUrl = `https://github-contributions-api.jogruber.de/v4/${username}?y=${year}`;
+                const res = await fetch(apiUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                renderContributionGrid(data);
+            } catch (err) {
+                console.error('Error fetching contributions:', err);
+            } finally {
+                // Signal to Puppeteer that render is completed
+                window.isSceneReady = true;
+            }
+        }
+
+        function renderContributionGrid(data) {
+            // Clear previous grid
+            while (contribGroup.children.length > 0) {
+                const obj = contribGroup.children[0];
+                contribGroup.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            }
+            pillarMeshes = [];
+
+            const contributions = data.contributions;
+            if (!contributions || contributions.length === 0) return;
+
+            const firstDate = new Date(contributions[0].date + 'T00:00:00Z');
+            const firstDayOfWeek = firstDate.getUTCDay(); // 0 = Sunday
+            const totalWeeks = Math.ceil((firstDayOfWeek + contributions.length) / 7);
+
+            const gridWidth = totalWeeks * CELL_SPACING;
+            const gridDepth = 7 * CELL_SPACING;
+
+            // 1. Base Pedestal Platform beneath the grid
+            const platformWidth = gridWidth + 3.0;
+            const platformDepth = gridDepth + 3.4;
+            const platformHeight = 0.35;
+
+            const platformGeo = new THREE.BoxGeometry(platformWidth, platformHeight, platformDepth);
+            const platformMat = new THREE.MeshStandardMaterial({
+                color: 0xf6f8fa,
+                roughness: 0.90,
+                metalness: 0.05
+            });
+            const platformMesh = new THREE.Mesh(platformGeo, platformMat);
+            platformMesh.position.set(0, -platformHeight / 2, 0);
+            platformMesh.receiveShadow = true;
+            contribGroup.add(platformMesh);
+
+            // Subtle border outline for the platform
+            const edgesGeo = new THREE.EdgesGeometry(platformGeo);
+            const edgesMat = new THREE.LineBasicMaterial({ color: 0xd0d7de, linewidth: 1 });
+            const edgesMesh = new THREE.LineSegments(edgesGeo, edgesMat);
+            edgesMesh.position.copy(platformMesh.position);
+            contribGroup.add(edgesMesh);
+
+            // Large ground plane to receive soft ambient shadow
+            const groundGeo = new THREE.PlaneGeometry(300, 300);
+            const groundMat = new THREE.ShadowMaterial({ opacity: 0.12 });
+            const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.position.y = -platformHeight - 0.01;
+            groundMesh.receiveShadow = true;
+            contribGroup.add(groundMesh);
+
+            // 2. Month Labels along top (-Z)
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            let lastMonth = -1;
+            let lastAddedWeek = -999;
+            const monthLabelsAdded = new Set();
+
+            for (let i = 0; i < contributions.length; i++) {
+                const d = new Date(contributions[i].date + 'T00:00:00Z');
+                const month = d.getUTCMonth();
+                const weekIndex = Math.floor((firstDayOfWeek + i) / 7);
+                const dayOfWeek = d.getUTCDay();
+
+                if (month !== lastMonth) {
+                    const targetWeek = dayOfWeek > 3 ? weekIndex + 1 : weekIndex;
+                    const monthKey = `${monthNames[month]}-${targetWeek}`;
+
+                    // Prevent overlap: require at least 3 weeks gap between adjacent month labels
+                    if (!monthLabelsAdded.has(monthKey) && targetWeek < totalWeeks && (targetWeek - lastAddedWeek >= 3)) {
+                        monthLabelsAdded.add(monthKey);
+                        lastAddedWeek = targetWeek;
+                        const labelMesh = createTextPlane(monthNames[month], 1.05, '#24292f', 0.40);
+                        const lx = (targetWeek * CELL_SPACING) - (gridWidth / 2) + (CELL_SPACING / 2);
+                        const lz = - (gridDepth / 2) - 1.25;
+                        labelMesh.position.set(lx, 0.05, lz);
+                        contribGroup.add(labelMesh);
+                    }
+                    lastMonth = month;
+                }
+            }
+
+            // 3. Day of Week Labels along left (-X)
+            const dayLabels = [
+                { name: "Mon", dayIndex: 1 },
+                { name: "Wed", dayIndex: 3 },
+                { name: "Fri", dayIndex: 5 }
+            ];
+
+            dayLabels.forEach(dl => {
+                const dayMesh = createTextPlane(dl.name, 0.90, '#24292f', 0.40);
+                const dx = - (gridWidth / 2) - 1.35;
+                const dz = (dl.dayIndex * CELL_SPACING) - (gridDepth / 2) + (CELL_SPACING / 2);
+                dayMesh.position.set(dx, 0.05, dz);
+                contribGroup.add(dayMesh);
+            });
+
+            // 4. Contribution Pillars
+            contributions.forEach((day, index) => {
+                const totalIndex = firstDayOfWeek + index;
+                const weekIndex = Math.floor(totalIndex / 7);
+                const dayIndex = totalIndex % 7;
+
+                const x = (weekIndex * CELL_SPACING) - (gridWidth / 2) + (CELL_SPACING / 2);
+                const z = (dayIndex * CELL_SPACING) - (gridDepth / 2) + (CELL_SPACING / 2);
+
+                const count = day.count || 0;
+                let level = day.level || 0;
+                if (count > 0 && level === 0) level = 1;
+                level = Math.min(Math.max(level, 0), 4);
+
+                const colorHex = CONTRIBUTION_COLORS[level];
+
+                // Calculate pillar height: flat base for 0, scaled pillar for count > 0
+                const targetHeight = count === 0
+                    ? BASE_HEIGHT
+                    : BASE_HEIGHT + (count * heightMultiplier);
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: colorHex,
+                    roughness: count === 0 ? 0.70 : 0.32,
+                    metalness: count === 0 ? 0.04 : 0.08
+                });
+
+                const mesh = new THREE.Mesh(baseBoxGeometry, material);
+                mesh.position.set(x, 0, z);
+                mesh.scale.set(1, targetHeight, 1);
+                mesh.castShadow = count > 0;
+                mesh.receiveShadow = true;
+
+                mesh.userData = {
+                    count: count,
+                    date: day.date,
+                    level: level
+                };
+
+                contribGroup.add(mesh);
+                pillarMeshes.push(mesh);
+            });
+
+            // Initial Render
+            renderer.render(scene, camera);
+        }
+
+        // Live Height Multiplier Update helper
+        function updateMultiplier(newVal) {
+            heightMultiplier = newVal;
+
+            pillarMeshes.forEach(mesh => {
+                const count = mesh.userData?.count || 0;
+                const newHeight = count === 0
+                    ? BASE_HEIGHT
+                    : BASE_HEIGHT + (count * heightMultiplier);
+
+                mesh.scale.set(1, newHeight, 1);
+                mesh.castShadow = count > 0;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Window Resize Handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.render(scene, camera);
+        });
+
+        // Expose globals for headless and external testing
+        window.camera = camera;
+        window.scene = scene;
+        window.renderer = renderer;
+        window.updateMultiplier = updateMultiplier;
+
+        // Initial fetch
+        loadContributions(currentUsername, currentYear);
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>
