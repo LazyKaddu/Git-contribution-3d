@@ -3,4 +3,5 @@ node_modules/
 .env.local
 .vercel
 dist/
+*.png
 .DS_Store
