@@ -1,4 +1,4 @@
-# 🚀 GitHub 3D Contribution Visualizer
+# GitHub 3D Contribution Visualizer
 
 An automated, serverless 3D visualizer that turns your GitHub contribution graph into an isometric 3D city and serves it directly as an auto-updating image for your GitHub Profile README.
 
@@ -8,7 +8,7 @@ An automated, serverless 3D visualizer that turns your GitHub contribution graph
 
 ---
 
-## 📌 Features
+## Features
 
 - **Isometric 3D Contribution Grid**: Renders your full year of contributions as 3D pillars with soft shadows, month/day labels, and pedestal staging in Three.js.
 - **Automated Screenshot Cron**: A Vercel Cron function runs periodically, opens the 3D WebGL scene with a headless browser (`puppeteer-core` + `@sparticuz/chromium-min`), and takes a crisp screenshot.
@@ -18,7 +18,7 @@ An automated, serverless 3D visualizer that turns your GitHub contribution graph
 
 ---
 
-## 🏗️ Architecture & How It Works
+## Architecture & How It Works
 
 ```mermaid
 flowchart TD
@@ -46,7 +46,7 @@ flowchart TD
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── api/
@@ -61,7 +61,7 @@ flowchart TD
 
 ---
 
-## 🛠️ Setup & Deployment Guide
+## Setup & Deployment Guide
 
 ### 1. Clone & Install Dependencies
 
@@ -92,7 +92,7 @@ let currentUsername = urlParams.get('username') || urlParams.get('user') || '<YO
 
 ---
 
-## 🖼️ Embedding in Your GitHub Profile
+## Embedding in Your GitHub Profile
 
 Add this markdown snippet to your GitHub Profile `README.md`:
 
@@ -104,7 +104,7 @@ Add this markdown snippet to your GitHub Profile `README.md`:
 
 ---
 
-## ⚙️ URL Query Parameters (Interactive Preview)
+## URL Query Parameters (Interactive Preview)
 
 You can preview the 3D scene directly in your browser with dynamic settings:
 
@@ -118,7 +118,7 @@ You can preview the 3D scene directly in your browser with dynamic settings:
 
 ---
 
-## ⚡ Technical Highlights
+## Technical Highlights
 
 ### Why `/api/get-image` is Needed
 GitHub routes external images through an anonymizing caching proxy called **Camo**. Camo aggressively caches images for long periods, which prevents dynamic images from updating. 
@@ -137,6 +137,6 @@ This forces GitHub Camo to request the fresh screenshot directly from your serve
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [ISC License](file:///home/kaddulive/Desktop/Projects/github-3d-contribs/LICENSE).
